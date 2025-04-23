@@ -9,7 +9,8 @@ CONTENTS                                                *godoc-swagger-contents*
     4. Commands .............................. |godoc-swagger-commands|
     5. Highlighting .......................... |godoc-swagger-highlighting|
     6. Folding .............................. |godoc-swagger-folding|
-    7. License ............................... |godoc-swagger-license|
+    7. Model Navigation ...................... |godoc-swagger-navigation|
+    8. License ............................... |godoc-swagger-license|
 
 ==============================================================================
 1. INTRODUCTION                                      *godoc-swagger-introduction*
@@ -97,7 +98,10 @@ The plugin works with zero configuration, but you can customize it:
       debug_mode = false, -- Set to true to see detailed information 
       
       -- Enable or disable folding support
-      enable_folding = true -- Set to false to disable godoc block folding
+      enable_folding = true, -- Set to false to disable godoc block folding
+      
+      -- Enable or disable LSP navigation features
+      enable_lsp = true -- Set to false to disable model reference navigation
     })
 <
 
@@ -113,9 +117,23 @@ The plugin works with zero configuration, but you can customize it:
     Create folds for all godoc blocks in the current buffer. This works with any
     folding system, including standard Vim folding and nvim-ufo.
 
+*:GodocGotoDefinition*
+    Jump to the definition of the model under cursor in a @Success or @Failure
+    annotation. This allows for navigating from API documentation to model
+    definitions in your code.
+
+*:GodocHighlightModels*
+    Highlight all model references in godoc blocks, making them visually
+    distinct and indicating they are navigable.
+
 *zG*
     Keybinding to create folds for all godoc blocks in the current buffer.
     This is a shortcut for :GodocFold and is automatically set up for Go files.
+    
+*<leader>gd*
+    Keybinding to go to definition of the model under cursor. This works in
+    godoc comment blocks when the cursor is over a model name in @Success or
+    @Failure annotations.
 
 ==============================================================================
 5. HIGHLIGHTING                                      *godoc-swagger-highlighting*
@@ -236,7 +254,43 @@ This integration works seamlessly with UFO's other folding features, enabling
 you to use godoc block folding alongside your existing folding setup.
 
 ==============================================================================
-7. LICENSE                                              *godoc-swagger-license*
+7. MODEL NAVIGATION                                   *godoc-swagger-navigation*
+
+The plugin provides navigation capabilities for model types referenced in godoc
+comments, similar to the "Go To Definition" feature found in LSP clients.
+
+When your cursor is on a model name in a @Success or @Failure annotation, you can:
+
+1. Press `<leader>gd` to jump to the definition of that model
+2. Run `:GodocGotoDefinition` to navigate to the model definition
+
+Model references are automatically detected from:
+- @Success annotations (e.g., @Success 200 {object} models.User)
+- @Failure annotations (e.g., @Failure 404 {object} models.ErrorResponse)
+
+The plugin will:
+1. First try to find the definition in the current buffer
+2. If not found, try to use LSP functionality if available
+3. Fall back to a grep search if LSP is not available
+
+This feature helps you:
+- Quickly check the structure of models used in your API responses
+- Ensure consistency between documentation and code
+- Navigate between API endpoints and their related data models
+
+Model references are highlighted and underlined to indicate they are navigable:
+
+>go
+    // GetUserByID godoc
+    // @Summary Get user by ID
+    // @Success 200 {object} models.User
+    //                        ^^^^^---------- Navigate to this model with <leader>gd
+    // @Failure 404 {object} models.ErrorResponse
+    //                        ^^^^^^^^---------- Or navigate to this model
+<
+
+==============================================================================
+8. LICENSE                                              *godoc-swagger-license*
 
 MIT License
 

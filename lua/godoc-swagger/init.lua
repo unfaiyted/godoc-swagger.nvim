@@ -2,11 +2,13 @@
 -- This module is loaded by require('godoc-swagger')
 
 local M = {}
+local M_folds = {}
 
 -- Function to find godoc swagger blocks in the buffer
-local function find_godoc_blocks()
+local function find_godoc_blocks(bufnr)
   -- Get buffer content
-  local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   local blocks = {}
   local current_block = nil
   local in_potential_godoc_block = false
@@ -75,7 +77,10 @@ function M.apply_highlighting()
   -- Find godoc blocks in the document
   local blocks = find_godoc_blocks()
   if #blocks == 0 then
-    vim.api.nvim_echo({ { 'No godoc blocks found', 'WarningMsg' } }, true, {})
+    -- Only show warning in debug mode
+    if M.debug_mode then
+      vim.api.nvim_echo({ { 'No godoc blocks found', 'WarningMsg' } }, true, {})
+    end
     return
   end
   
@@ -138,8 +143,11 @@ function M.apply_highlighting()
     vim.fn.matchadd('GodocSwaggerRouterMethod', line_constrained_pattern('\\s\\+\\[[^\\]]*\\]', start_line, end_line), 103)
     
     -- Model types - match model names (word with possible dots and brackets)
-    -- This is challenging but try to match common patterns
-    vim.fn.matchadd('GodocSwaggerTypeObject', line_constrained_pattern('\\s\\+[A-Za-z]\\w*\\.[A-Za-z]\\w*\\(\\[[^\\]]*\\]\\)*', start_line, end_line), 103)
+    -- Only apply if LSP features are disabled, otherwise the LSP module will handle this with graduated colors
+    if not M.enable_lsp then
+      -- This is challenging but try to match common patterns
+      vim.fn.matchadd('GodocSwaggerTypeObject', line_constrained_pattern('\\s\\+[A-Za-z]\\w*\\.[A-Za-z]\\w*\\(\\[[^\\]]*\\]\\)*', start_line, end_line), 103)
+    end
     
     -- Required flags - match true/false
     vim.fn.matchadd('GodocSwaggerParamRequired', line_constrained_pattern('\\s\\+\\(true\\|false\\)\\s\\+', start_line, end_line), 103)
@@ -163,13 +171,14 @@ function M.apply_highlighting()
     vim.fn.matchadd('GodocSwaggerGodocLine', line_constrained_pattern('//.*godoc.*$', start_line, start_line), 110)
   end
   
-  -- Print a message to confirm highlighting was applied
-  vim.api.nvim_echo({ { 'Godoc Swagger highlighting applied to ' .. #blocks .. ' block(s)', 'Normal' } }, true, {})
+  -- Print a message only in debug mode
+  if M.debug_mode then
+    vim.api.nvim_echo({ { 'Godoc Swagger highlighting applied to ' .. #blocks .. ' block(s)', 'Normal' } }, true, {})
+  end
 end
 
--- Setup function to be called by users
--- Godoc block detection for integrating with folding systems
-local M_folds = {}
+-- Expose find_godoc_blocks for use by other modules
+M.find_godoc_blocks = find_godoc_blocks
 
 -- Function to find the boundaries of a godoc block starting at a line
 local function find_godoc_block(bufnr, start_line)
@@ -276,7 +285,9 @@ function M_folds.toggle_godoc_blocks()
   
   -- Only process Go files
   if vim.bo[bufnr].filetype ~= 'go' then
-    vim.notify('Not a Go file', vim.log.levels.WARN)
+    if M.debug_mode then
+      vim.notify('Not a Go file', vim.log.levels.WARN)
+    end
     return
   end
   
@@ -290,7 +301,9 @@ function M_folds.toggle_godoc_blocks()
     -- Clear all virtual text and extmarks
     vim.api.nvim_buf_clear_namespace(bufnr, vim._godoc_ns, 0, -1)
     vim.b[bufnr].godoc_hidden = false
-    vim.notify('Godoc blocks revealed', vim.log.levels.INFO)
+    if M.debug_mode then
+      vim.notify('Godoc blocks revealed', vim.log.levels.INFO)
+    end
     return
   end
   
@@ -334,7 +347,9 @@ function M_folds.toggle_godoc_blocks()
   end
   
   vim.b[bufnr].godoc_hidden = true
-  vim.notify('Hidden ' .. hidden_count .. ' godoc blocks', vim.log.levels.INFO)
+  if M.debug_mode then
+    vim.notify('Hidden ' .. hidden_count .. ' godoc blocks', vim.log.levels.INFO)
+  end
 end
 
 -- Traditional conceal method as backup
@@ -344,7 +359,9 @@ function M_folds.toggle_conceal_godoc_blocks()
   
   -- Only process Go files
   if vim.bo[bufnr].filetype ~= 'go' then
-    vim.notify('Not a Go file', vim.log.levels.WARN)
+    if M.debug_mode then
+      vim.notify('Not a Go file', vim.log.levels.WARN)
+    end
     return
   end
   
@@ -360,7 +377,9 @@ function M_folds.toggle_conceal_godoc_blocks()
       pcall(vim.fn.matchdelete, match_id)
     end
     vim.b[bufnr].godoc_concealed = {}
-    vim.notify('Godoc blocks revealed (conceal method)', vim.log.levels.INFO)
+    if M.debug_mode then
+      vim.notify('Godoc blocks revealed (conceal method)', vim.log.levels.INFO)
+    end
     
     -- Also reset conceal settings for current window
     vim.wo[winnr].conceallevel = 0
@@ -392,7 +411,9 @@ function M_folds.toggle_conceal_godoc_blocks()
     end
   end
   
-  vim.notify('Concealed ' .. conceal_count .. ' godoc blocks', vim.log.levels.INFO)
+  if M.debug_mode then
+    vim.notify('Concealed ' .. conceal_count .. ' godoc blocks', vim.log.levels.INFO)
+  end
 end
 
 -- Standard fold implementation - compatible with other folding systems
@@ -401,7 +422,9 @@ function M_folds.fold_godoc_blocks()
   
   -- Only process Go files
   if vim.bo[bufnr].filetype ~= 'go' then
-    vim.notify('Not a Go file', vim.log.levels.WARN)
+    if M.debug_mode then
+      vim.notify('Not a Go file', vim.log.levels.WARN)
+    end
     return
   end
   
@@ -419,7 +442,9 @@ function M_folds.fold_godoc_blocks()
     fold_count = fold_count + 1
   end
   
-  vim.notify('Folded ' .. fold_count .. ' godoc blocks', vim.log.levels.INFO)
+  if M.debug_mode then
+    vim.notify('Folded ' .. fold_count .. ' godoc blocks', vim.log.levels.INFO)
+  end
 end
 
 -- Function specifically to fold the block under cursor with enhanced debugging
@@ -542,17 +567,42 @@ function M.setup(opts)
     router_path_var = '#c2a37b', -- Router path variables (lighter than path)
     router_method = '#bfa36a', -- Router method
     
-    security_scheme = '#dda3a1' -- Security scheme name
+    security_scheme = '#dda3a1', -- Security scheme name
+    
+    -- LSP navigation features
+    model_reference = '#6d8a82', -- Clickable model references (primary/root level) - more gray-green base
+    model_reference_l1 = '#5e7870', -- Level 1 nested generic (more gray)
+    model_reference_l2 = '#50655f', -- Level 2 nested generic (more gray)
+    model_reference_l3 = '#41534e' -- Level 3+ nested generic (very gray)
   }
   
   -- Debug mode for troubleshooting
   M.debug_mode = opts.debug_mode or false
+  -- Expose debug mode globally so other modules can check it
+  vim.g.godoc_swagger_debug_mode = M.debug_mode
   
   -- Folding option (enabled by default)
   M.enable_folding = opts.enable_folding
   if M.enable_folding == nil then
     M.enable_folding = true
   end
+  
+  -- LSP features option (enabled by default)
+  M.enable_lsp = opts.enable_lsp
+  if M.enable_lsp == nil then
+    M.enable_lsp = true
+  end
+  
+  -- LSP navigation style (default: "picker")
+  -- "direct" = Go directly to definition when possible
+  -- "picker" = Always use Telescope/Snacks/picker UI
+  -- "hover" = Use a hover-style window that closes after selection
+  -- "snacks" = Specifically use Snacks picker if available
+  M.lsp_navigation_style = opts.lsp_navigation_style or "snacks"
+  
+  -- Custom keybinding for Godoc goto definition (default: nil, which maps to <leader>gd)
+  -- Set to false to disable automatic keybinding
+  M.goto_definition_key = opts.goto_definition_key
   
   -- Merge user colors with defaults
   local colors = vim.tbl_deep_extend('force', default_colors, opts.colors or {})
@@ -589,6 +639,12 @@ function M.setup(opts)
     
     -- Security components
     'highlight default GodocSwaggerSecurityScheme ctermfg=174 guifg=' .. colors.security_scheme,
+    
+    -- LSP navigation features with graduated colors for different nesting levels
+    'highlight default GodocSwaggerModelReference ctermfg=108 guifg=' .. colors.model_reference .. ' gui=underline',
+    'highlight default GodocSwaggerModelReferenceL1 ctermfg=107 guifg=' .. colors.model_reference_l1 .. ' gui=underline',
+    'highlight default GodocSwaggerModelReferenceL2 ctermfg=102 guifg=' .. colors.model_reference_l2 .. ' gui=none',
+    'highlight default GodocSwaggerModelReferenceL3 ctermfg=101 guifg=' .. colors.model_reference_l3 .. ' gui=none',
     
     -- Debug highlighting
     'highlight default GodocSwaggerDebugBlock ctermfg=188 guifg=#FFFFFF guibg=#333333'
@@ -634,6 +690,33 @@ function M.setup(opts)
         buffer = 0,
         callback = apply_highlighting_throttled,
       })
+      
+      -- If LSP features are enabled, highlight model references
+      if M.enable_lsp then
+        -- Load the LSP module
+        local lsp = require('godoc-swagger.lsp')
+        
+        -- Highlight model references in comments
+        lsp.highlight_model_references(0)
+        
+        -- Update model references when text changes
+        vim.api.nvim_create_autocmd({'TextChanged', 'TextChangedI'}, {
+          buffer = 0,
+          callback = function()
+            if update_timer then
+              vim.fn.timer_stop(update_timer)
+            end
+            
+            update_timer = vim.fn.timer_start(300, function()
+              -- Only apply if buffer is still valid
+              if vim.api.nvim_buf_is_valid(0) then
+                lsp.highlight_model_references(0)
+              end
+              update_timer = nil
+            end)
+          end,
+        })
+      end
     end,
   })
   
@@ -672,13 +755,58 @@ function M.setup(opts)
         M_folds.toggle_conceal_godoc_blocks()
       end, {})
     end)
-    
-    -- Check if UFO is available - if so, provide instructions for integration
-    local has_ufo = pcall(require, 'ufo')
-    if has_ufo then
-      -- Add a notification only when debug mode is active
-      if M.debug_mode then
-        vim.notify([[
+  end
+  
+  -- Set up LSP features if enabled
+  if M.enable_lsp then
+    -- Create commands for LSP functionality
+    pcall(function()
+      -- Load the LSP module
+      local lsp = require('godoc-swagger.lsp')
+      
+      -- Command to jump to definition under cursor
+      vim.api.nvim_create_user_command('GodocGotoDefinition', function()
+        lsp.goto_definition_under_cursor()
+      end, {})
+      
+      -- Command to highlight model references
+      vim.api.nvim_create_user_command('GodocHighlightModels', function()
+        lsp.highlight_model_references()
+      end, {})
+      
+      -- Add keybinding for Go To Definition
+      vim.api.nvim_create_autocmd('FileType', {
+        group = augroup,
+        pattern = 'go',
+        callback = function()
+          -- Set up keybindings based on user configuration
+          local key = M.goto_definition_key
+          
+          -- If user explicitly set goto_definition_key to false, don't map any keys
+          if key ~= false then
+            -- If user provided a custom key, use it, otherwise default to <leader>gd
+            if key then
+              vim.keymap.set('n', key, function()
+                lsp.goto_definition_under_cursor()
+              end, { buffer = true, desc = "Godoc: Go to model definition" })
+            else
+              -- Default mapping
+              vim.keymap.set('n', '<leader>gd', function()
+                lsp.goto_definition_under_cursor()
+              end, { buffer = true, desc = "Godoc: Go to model definition" })
+            end
+          end
+        end
+      })
+    end)
+  end
+  
+  -- Check if UFO is available - if so, provide instructions for integration
+  local has_ufo = pcall(require, 'ufo')
+  if has_ufo then
+    -- Add a notification only when debug mode is active
+    if M.debug_mode then
+      vim.notify([[
 UFO detected! To integrate godoc-swagger with nvim-ufo, add this to your UFO setup:
 
 require('ufo').setup({
@@ -697,72 +825,71 @@ require('ufo').setup({
   }
 })
 ]], vim.log.levels.INFO)
-      end
-    else
-      -- For non-UFO users, set up a basic folding approach using vim commands
-      vim.api.nvim_create_autocmd('FileType', {
-        group = augroup,
-        pattern = patterns,
-        callback = function()
-          local buf = vim.api.nvim_get_current_buf()
-          
-          -- Add keybindings for godoc folding
-          -- zgd - Toggle godoc blocks without affecting folding (recommended with UFO)
-          vim.keymap.set('n', 'zgd', function()
-            M_folds.toggle_godoc_blocks()
-          end, { buffer = true, desc = "Toggle godoc blocks (UFO compatible)" })
-          
-          -- zC - Toggle conceal for godoc blocks (alternative method)
-          vim.keymap.set('n', 'zC', function()
-            M_folds.toggle_conceal_godoc_blocks()
-          end, { buffer = true, desc = "Toggle conceal for godoc blocks" })
-          
-          -- zG - Fold method (now compatible with other folding systems)
-          vim.keymap.set('n', 'zG', function()
-            M_folds.fold_godoc_blocks()
-          end, { buffer = true, desc = "Fold All Godoc Blocks" })
-          
-          -- Add diagnostic keybinding that bypasses za completely
-          vim.keymap.set('n', '<Leader>z', function()
-            -- Force debug output to see what's happening
-            M_folds.fold_under_cursor(true)
-          end, { buffer = true, desc = "Fold godoc block with debug info" })
-          
-          -- Override za behavior for godoc blocks
-          vim.keymap.set('n', 'za', function()
-            -- If we're on a godoc line or annotation, handle it specially
-            -- Otherwise, fall back to default za behavior
-            if not M_folds.fold_under_cursor(false) then
-              -- Execute the original za command
-              vim.cmd("normal! za")
-            end
-          end, { buffer = true, desc = "Toggle fold (godoc-aware)" })
-          
-          -- Add additional keybindings for debugging when in debug mode
-          if M.debug_mode then
-            vim.keymap.set('n', '<Leader>zz', function()
-              M_folds.fold_under_cursor(true)
-            end, { buffer = true, desc = "Debug fold godoc block under cursor" })
-          end
-          
-          -- Ditto for zo and zc
-          vim.keymap.set('n', 'zo', function()
-            if not M_folds.fold_under_cursor(false) then
-              vim.cmd("normal! zo")
-            else
-              -- If we just created a fold, open it
-              vim.cmd("normal! zo")
-            end
-          end, { buffer = true, desc = "Open fold (godoc-aware)" })
-          
-          vim.keymap.set('n', 'zc', function()
-            if not M_folds.fold_under_cursor(false) then
-              vim.cmd("normal! zc")
-            end
-          end, { buffer = true, desc = "Close fold (godoc-aware)" })
-        end,
-      })
     end
+  else
+    -- For non-UFO users, set up a basic folding approach using vim commands
+    vim.api.nvim_create_autocmd('FileType', {
+      group = augroup,
+      pattern = patterns,
+      callback = function()
+        local buf = vim.api.nvim_get_current_buf()
+        
+        -- Add keybindings for godoc folding
+        -- zgd - Toggle godoc blocks without affecting folding (recommended with UFO)
+        vim.keymap.set('n', 'zgd', function()
+          M_folds.toggle_godoc_blocks()
+        end, { buffer = true, desc = "Toggle godoc blocks (UFO compatible)" })
+        
+        -- zC - Toggle conceal for godoc blocks (alternative method)
+        vim.keymap.set('n', 'zC', function()
+          M_folds.toggle_conceal_godoc_blocks()
+        end, { buffer = true, desc = "Toggle conceal for godoc blocks" })
+        
+        -- zG - Fold method (now compatible with other folding systems)
+        vim.keymap.set('n', 'zG', function()
+          M_folds.fold_godoc_blocks()
+        end, { buffer = true, desc = "Fold All Godoc Blocks" })
+        
+        -- Add diagnostic keybinding that bypasses za completely
+        vim.keymap.set('n', '<Leader>z', function()
+          -- Force debug output to see what's happening
+          M_folds.fold_under_cursor(true)
+        end, { buffer = true, desc = "Fold godoc block with debug info" })
+        
+        -- Override za behavior for godoc blocks
+        vim.keymap.set('n', 'za', function()
+          -- If we're on a godoc line or annotation, handle it specially
+          -- Otherwise, fall back to default za behavior
+          if not M_folds.fold_under_cursor(false) then
+            -- Execute the original za command
+            vim.cmd("normal! za")
+          end
+        end, { buffer = true, desc = "Toggle fold (godoc-aware)" })
+        
+        -- Add additional keybindings for debugging when in debug mode
+        if M.debug_mode then
+          vim.keymap.set('n', '<Leader>zz', function()
+            M_folds.fold_under_cursor(true)
+          end, { buffer = true, desc = "Debug fold godoc block under cursor" })
+        end
+        
+        -- Ditto for zo and zc
+        vim.keymap.set('n', 'zo', function()
+          if not M_folds.fold_under_cursor(false) then
+            vim.cmd("normal! zo")
+          else
+            -- If we just created a fold, open it
+            vim.cmd("normal! zo")
+          end
+        end, { buffer = true, desc = "Open fold (godoc-aware)" })
+        
+        vim.keymap.set('n', 'zc', function()
+          if not M_folds.fold_under_cursor(false) then
+            vim.cmd("normal! zc")
+          end
+        end, { buffer = true, desc = "Close fold (godoc-aware)" })
+      end,
+    })
   end
   
   -- Don't return anything from setup()

@@ -28,6 +28,7 @@ A Neovim plugin that provides syntax highlighting for Swagger annotations in Go 
   - Failure definitions (`@Failure`) with the same detailed breakdown
   - Router paths (`@Router`) with separated highlighting for:
     - Path components
+    - Path variables (like `{clientID}`) highlighted with a distinct color
     - HTTP methods
   - Security definitions (`@Security`)
   - Description text (in quotes)
@@ -35,6 +36,10 @@ A Neovim plugin that provides syntax highlighting for Swagger annotations in Go 
 - Manual re-highlighting with `:GodocHighlight` command
 - Consistent highlighting that persists after colorscheme changes
 - Folding support to collapse godoc blocks to their first line
+- **NEW!** Navigate to model definitions from godoc comments:
+  - Model references in `@Success` and `@Failure` annotations are highlighted and navigable
+  - Use `:GodocGotoDefinition` or `<leader>gd` to jump to the definition of the referenced type
+  - Visual underlines show which model references can be navigated
 
 ## Installation
 
@@ -110,7 +115,22 @@ require('godoc-swagger').setup({
   debug_mode = false, -- Set to true to see detailed information about detected blocks
   
   -- Enable folding support (default: true)
-  enable_folding = true -- Set to false to disable godoc block folding
+  enable_folding = true, -- Set to false to disable godoc block folding
+  
+  -- Enable LSP-like features for godoc model navigation (default: true)
+  enable_lsp = true, -- Set to false to disable model reference navigation
+  
+  -- Navigation style for going to definitions (default: "snacks")
+  -- "snacks" = Use Snacks picker UI specifically (recommended)
+  -- "picker" = Use Telescope or Snap picker UI
+  -- "direct" = Go directly to definition when possible 
+  -- "hover" = Attempt to use a hover-style window that closes after selection
+  lsp_navigation_style = "snacks", -- Choose your preferred navigation style
+  
+  -- Custom keybinding for going to definitions (default: nil which maps to <leader>gd)
+  -- Set to false to disable automatic keybinding completely
+  -- Example: goto_definition_key = "gZ" for a custom mapping
+  goto_definition_key = nil,
 })
 ```
 
@@ -121,6 +141,40 @@ The plugin automatically applies highlighting when you open `.go` files. If you 
 ```
 :GodocHighlight
 ```
+
+### Model Navigation
+
+The plugin adds navigation capabilities for model types referenced in godoc comments:
+
+```
+:GodocGotoDefinition  - Jump to the definition of the model under cursor
+:GodocHighlightModels - Re-highlight model references in the current buffer
+```
+
+When your cursor is on a model name like `models.User` in a `@Success` or `@Failure` annotation,
+you can press `<leader>gd` to jump to its definition in your code (or your custom keybinding if configured).
+
+Model references are automatically underlined to show they are navigable. There are four navigation styles:
+
+1. **Snacks (default)** - Uses the Snacks picker which automatically closes after selection
+2. **Picker** - Uses Telescope to show all matching symbols in a dropdown list
+3. **Direct** - Jumps directly to the definition when possible
+4. **Hover** - Attempts to use a hover-style window that closes after selection
+
+You can configure your preferred style in your Neovim config:
+
+```lua
+require('godoc-swagger').setup({
+  lsp_navigation_style = "picker" -- Set to "direct", "picker", or "hover"
+})
+```
+
+This feature helps you:
+
+1. Quickly check the structure of models used in your API responses
+2. Ensure consistency between documentation and code
+3. Navigate between API endpoints and their related models
+4. Handle complex generic types with multiple component parts
 
 ### Folding
 
