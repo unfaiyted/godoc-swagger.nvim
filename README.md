@@ -1,0 +1,273 @@
+# godoc-swagger.nvim
+
+A Neovim plugin that provides syntax highlighting for Swagger annotations in Go files. Perfect for developers working with Go's Swagger API documentation.
+
+![godoc-swagger screenshot](https://github.com/yourusername/godoc-swagger.nvim/raw/main/screenshots/godoc-swagger-demo.png)
+
+## Features
+
+- Intelligently highlights only genuine godoc Swagger annotations in Go files
+- Only applies to comment blocks starting with `// godoc` and containing `@` annotations
+- Preserves normal syntax highlighting for all non-Swagger code
+- Real-time highlighting that updates as you type
+- Works with default Rose Pine inspired color scheme out of the box
+- Fully customizable colors to match your theme
+- Highlights specific parts of Swagger annotations with detailed component-level coloring:
+  - Tags (`@Summary`, `@Description`, etc.)
+  - Parameters (`@Param`) with distinct highlighting for:
+    - Parameter name
+    - Location (path, query, etc.)
+    - Data type
+    - Required flag
+    - Description
+  - Success definitions (`@Success`) with distinct highlighting for:
+    - Status code
+    - Object type
+    - Model name
+    - Description
+  - Failure definitions (`@Failure`) with the same detailed breakdown
+  - Router paths (`@Router`) with separated highlighting for:
+    - Path components
+    - HTTP methods
+  - Security definitions (`@Security`)
+  - Description text (in quotes)
+- Automatic highlighting when opening Go files
+- Manual re-highlighting with `:GodocHighlight` command
+- Consistent highlighting that persists after colorscheme changes
+- Folding support to collapse godoc blocks to their first line
+
+## Installation
+
+### Using [lazy.nvim](https://github.com/folke/lazy.nvim)
+
+```lua
+{
+  "yourusername/godoc-swagger.nvim",
+  event = { "BufReadPre *.go", "BufNewFile *.go" },
+  config = true, -- Uses the default configuration
+}
+```
+
+### Using [packer.nvim](https://github.com/wbthomason/packer.nvim)
+
+```lua
+use {
+  "yourusername/godoc-swagger.nvim",
+  config = function()
+    require("godoc-swagger").setup()
+  end
+}
+```
+
+### Using [vim-plug](https://github.com/junegunn/vim-plug)
+
+```vim
+Plug 'yourusername/godoc-swagger.nvim'
+
+" In your init.vim, after plug#end():
+lua require('godoc-swagger').setup()
+```
+
+## Configuration
+
+The plugin works with zero configuration, but you can customize it to your preferences:
+
+```lua
+require('godoc-swagger').setup({
+  -- Customize colors (optional)
+  colors = {
+    -- Basic annotation colors
+    comment = '#585273',       -- Base color for comment lines in godoc blocks
+    tag = '#a794c7',           -- Tags like @Summary, @Description
+    param = '#c9a5a3',         -- Base color for @Param
+    success = '#87b3ba',       -- Base color for @Success
+    failure = '#c26580',       -- Base color for @Failure
+    router = '#d1a86a',        -- Base color for @Router
+    description = '#7d7a93',   -- Description tag
+    security = '#c78d8b',      -- Base color for @Security
+    status_code = '#87b3ba',   -- HTTP status codes
+    type_keyword = '#656380',  -- Type keywords like {object}
+    type_object = '#2e647c',   -- Type identifiers
+    description_text = '#6e6a86', -- Text in descriptions
+    
+    -- Detailed component colors
+    param_name = '#b3a5d3',    -- Parameter name 
+    param_location = '#c9a5a3', -- Parameter location (path, query, etc)
+    param_type = '#9abbc7',    -- Parameter type (string, int, etc)
+    param_required = '#e09a8c', -- Parameter required flag (true/false)
+    
+    router_path = '#c19557',   -- Router path (more muted than main router color)
+    router_path_var = '#c2a37b', -- Router path variables in curly braces {varName}
+    router_method = '#bfa36a', -- Router method ([get], [post], etc)
+    
+    security_scheme = '#dda3a1' -- Security scheme name
+  },
+  
+  -- File patterns to apply highlighting to (optional)
+  patterns = {'*.go'}, -- Default is Go files only
+  
+  -- Enable debug mode for troubleshooting highlighting issues
+  debug_mode = false, -- Set to true to see detailed information about detected blocks
+  
+  -- Enable folding support (default: true)
+  enable_folding = true -- Set to false to disable godoc block folding
+})
+```
+
+## Usage
+
+The plugin automatically applies highlighting when you open `.go` files. If you need to reapply highlighting manually, use:
+
+```
+:GodocHighlight
+```
+
+### Folding
+
+The plugin provides folding support for godoc comment blocks using one of two approaches:
+
+#### Hiding Godoc Blocks
+
+The plugin provides three approaches to hide godoc blocks, with increasing levels of compatibility with other folding systems:
+
+**1. Extmark-Based Approach (RECOMMENDED, fully compatible with UFO):**
+- `zgd` - Toggle godoc blocks using extmarks (won't affect folding)
+
+Commands:
+```
+:GodocToggle      - Toggle godoc blocks using extmarks (UFO compatible)
+```
+
+This approach uses Neovim's extmark feature to visually hide the content without changing the buffer or interfering with folding systems. It's the most compatible option for use with nvim-ufo or other folding plugins.
+
+**2. Conceal-Based Approach (fairly compatible with UFO):**
+- `zC` - Toggle concealment of godoc blocks
+
+Commands:
+```
+:GodocToggleConceal - Toggle concealment of all godoc blocks
+```
+
+This approach doesn't use the folding system but relies on Vim's concealment feature.
+
+**3. Traditional Folding (now compatible with other folding plugins):**
+- `zG` - Create folds for all godoc blocks in the file
+
+Commands:
+```
+:GodocFold        - Create folds for all godoc blocks in the current file
+:GodocFoldDebug   - Attempt to fold the block under cursor with detailed debugging output
+```
+
+This approach uses Vim's manual folding to create folds for godoc blocks, but has been improved to work alongside other folding systems like nvim-ufo without disrupting them.
+
+**Troubleshooting:**
+If you're having trouble with hiding godoc blocks:
+1. Try the extmark-based approach with `zgd` or `:GodocToggle` first (recommended)
+2. If that doesn't work, try the conceal approach with `zC` or `:GodocToggleConceal`
+3. The traditional folding method (`:GodocFold`) has been improved to work alongside other folding systems
+
+#### Integration with nvim-ufo
+
+For users of [nvim-ufo](https://github.com/kevinhwang91/nvim-ufo), the plugin provides a folding provider to integrate with UFO's advanced folding system:
+
+```lua
+-- In your UFO setup configuration
+require('ufo').setup({
+  provider_selector = function(bufnr, filetype, buftype)
+    if filetype == 'go' then
+      -- Use godoc-swagger's fold provider for Go files
+      return {'godoc-swagger', 'treesitter', 'indent'}
+    end
+    return {'treesitter', 'indent'}
+  end,
+  -- Register the provider
+  providers = {
+    ['godoc-swagger'] = function(bufnr)
+      return require('godoc-swagger').folds.get_folding_ranges(bufnr)
+    end
+  }
+})
+```
+
+This integration works seamlessly with UFO's other folding features, enabling you to use godoc block folding alongside your existing folding setup.
+
+Each godoc block will fold to a single line showing the initial godoc comment and a count of swagger annotations, helping clean up the display while still making the API documentation accessible when needed.
+
+### Comment Format Requirements
+
+For comments to be detected and highlighted as Swagger annotations, they must:
+
+1. Start with a line that includes the word "godoc" (typically `// FunctionName godoc`)
+2. Include subsequent lines with Swagger annotations starting with "@"
+3. Each annotation line should start with `// @` 
+
+The highlighting only applies to properly formatted godoc blocks, preserving normal syntax highlighting for all other code and comments.
+
+### Troubleshooting
+
+If your godoc blocks aren't being highlighted:
+
+1. Make sure your first comment line contains "godoc" (e.g., `// GetUserByID godoc`)
+2. Verify your annotation lines start with `// @` 
+3. Try enabling debug mode in your configuration:
+
+```lua
+require('godoc-swagger').setup({
+  debug_mode = true
+})
+```
+
+This will show notification messages with details about detected godoc blocks.
+
+## Example
+
+Here's how your Go Swagger annotations will look with this plugin:
+
+```go
+// GetUserByID godoc
+// @Summary Get user by ID
+// @Description Retrieves a user's information by their unique identifier
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param id path int true "User ID"
+// @Success 200 {object} models.User
+// @Failure 404 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /users/{id} [get]
+// @Security Bearer
+func GetUserByID(c *gin.Context) {
+    // Implementation
+    // This comment won't get highlighted since it's not part of the godoc block
+}
+
+// Regular comments like this won't be affected
+// Only comments that start with // [function name] godoc
+// And have @ annotations will be highlighted
+```
+
+## Planned Features
+
+Here are some features that could be added in future versions:
+
+- [ ] Integration with LSP for popup documentation of Swagger annotations
+- [ ] Auto-completion of Swagger annotation tags
+- [ ] Preview of generated Swagger documentation
+- [ ] Support for additional Swagger annotation syntaxes (like those used in other languages)
+- [ ] Linting and validation of Swagger annotations
+- [ ] Code folding specific to Swagger comment blocks
+- [ ] Quick jumping between annotation blocks with navigation commands
+
+## Contributing
+
+Contributions are welcome! Feel free to open issues or pull requests.
+
+## License
+
+MIT
+
+## Acknowledgements
+
+- Inspired by the beautiful [Rose Pine](https://github.com/rose-pine/neovim) color scheme
+- Thanks to the Neovim community for their support and feedback

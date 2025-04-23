@@ -1,0 +1,245 @@
+*godoc-swagger.txt*    Swagger annotations highlighting for Go files
+
+==============================================================================
+CONTENTS                                                *godoc-swagger-contents*
+
+    1. Introduction .......................... |godoc-swagger-introduction|
+    2. Installation .......................... |godoc-swagger-installation|
+    3. Configuration ......................... |godoc-swagger-configuration|
+    4. Commands .............................. |godoc-swagger-commands|
+    5. Highlighting .......................... |godoc-swagger-highlighting|
+    6. Folding .............................. |godoc-swagger-folding|
+    7. License ............................... |godoc-swagger-license|
+
+==============================================================================
+1. INTRODUCTION                                      *godoc-swagger-introduction*
+
+godoc-swagger is a plugin that provides intelligent syntax highlighting for 
+Swagger annotations in Go files. It's designed to make API documentation more 
+readable with thoughtfully designed color schemes.
+
+The plugin specifically targets comment blocks that:
+1. Start with a line containing "godoc" (e.g., "// FunctionName godoc")
+2. Contain lines with Swagger annotations that start with "@" (e.g., "@Summary")
+
+It preserves normal syntax highlighting for all other code and comments.
+
+==============================================================================
+2. INSTALLATION                                      *godoc-swagger-installation*
+
+With lazy.nvim:
+>lua
+    {
+      "yourusername/godoc-swagger.nvim",
+      event = { "BufReadPre *.go", "BufNewFile *.go" },
+      config = true, -- Uses the default configuration
+    }
+<
+
+With packer.nvim:
+>lua
+    use {
+      "yourusername/godoc-swagger.nvim",
+      config = function()
+        require("godoc-swagger").setup()
+      end
+    }
+<
+
+With vim-plug:
+>vim
+    Plug 'yourusername/godoc-swagger.nvim'
+    
+    " In your init.vim, after plug#end():
+    lua require('godoc-swagger').setup()
+<
+
+==============================================================================
+3. CONFIGURATION                                    *godoc-swagger-configuration*
+
+The plugin works with zero configuration, but you can customize it:
+
+>lua
+    require('godoc-swagger').setup({
+      -- Customize colors (optional)
+      colors = {
+        -- Basic annotation colors
+        comment = '#585273',       -- Base color for comment lines in godoc blocks
+        tag = '#a794c7',           -- Tags like @Summary, @Description
+        param = '#c9a5a3',         -- Base color for @Param
+        success = '#87b3ba',       -- Base color for @Success
+        failure = '#c26580',       -- Base color for @Failure
+        router = '#d1a86a',        -- Base color for @Router
+        description = '#7d7a93',   -- Description tag
+        security = '#c78d8b',      -- Base color for @Security
+        status_code = '#87b3ba',   -- HTTP status codes
+        type_keyword = '#656380',  -- Type keywords like {object}
+        type_object = '#2e647c',   -- Type identifiers
+        description_text = '#6e6a86', -- Text in descriptions
+        
+        -- Detailed component colors
+        param_name = '#b3a5d3',    -- Parameter name 
+        param_location = '#c9a5a3', -- Parameter location 
+        param_type = '#9abbc7',    -- Parameter type 
+        param_required = '#e09a8c', -- Parameter required flag
+        
+        router_path = '#c19557',   -- Router path (more muted)
+        router_path_var = '#c2a37b', -- Router path variables {varName}
+        router_method = '#bfa36a', -- Router method
+        
+        security_scheme = '#dda3a1' -- Security scheme name
+      },
+      
+      -- File patterns to apply highlighting to (optional)
+      patterns = {'*.go'}, -- Default is Go files only
+      
+      -- Enable debug mode for troubleshooting highlighting issues
+      debug_mode = false, -- Set to true to see detailed information 
+      
+      -- Enable or disable folding support
+      enable_folding = true -- Set to false to disable godoc block folding
+    })
+<
+
+==============================================================================
+4. COMMANDS                                            *godoc-swagger-commands*
+
+*:GodocHighlight*
+    Manually apply the Swagger annotations highlighting to the current buffer.
+    This is automatically done when opening Go files, but you can use this
+    command to refresh the highlighting if needed.
+
+*:GodocFold*
+    Create folds for all godoc blocks in the current buffer. This works with any
+    folding system, including standard Vim folding and nvim-ufo.
+
+*zG*
+    Keybinding to create folds for all godoc blocks in the current buffer.
+    This is a shortcut for :GodocFold and is automatically set up for Go files.
+
+==============================================================================
+5. HIGHLIGHTING                                      *godoc-swagger-highlighting*
+
+The plugin intelligently highlights the following Swagger annotation elements
+only within godoc comment blocks, with detailed component-level coloring:
+
+- Tags (@Summary, @Description, @Tags, @Accept, @Produce, @Router, @Security)
+- Parameters (@Param) with distinct highlighting for:
+  * Parameter name
+  * Location (path, query, etc.)
+  * Data type
+  * Required flag
+  * Description
+- Success definitions (@Success) with distinct highlighting for:
+  * Status code
+  * Object type
+  * Model name
+  * Description
+- Failure definitions (@Failure) with the same detailed breakdown
+- Router paths (@Router) with separated highlighting for:
+  * Path components
+  * HTTP methods
+- Security definitions (@Security)
+- Description text (in quotes)
+
+The plugin dynamically updates highlighting as you type, with changes reflected
+immediately without affecting the rest of your code.
+
+Example of a properly formatted godoc block that will be highlighted:
+>go
+    // GetUserByID godoc
+    // @Summary Get user by ID
+    // @Description Retrieves a user's information by their unique identifier
+    // @Tags users
+    // @Accept json
+    // @Produce json
+    // @Param id path int true "User ID"
+    // @Success 200 {object} models.User
+    // @Failure 404 {object} models.ErrorResponse
+    // @Failure 500 {object} models.ErrorResponse
+    // @Router /users/{id} [get]
+    // @Security Bearer
+<
+
+Regular comments outside of godoc blocks maintain their normal syntax
+highlighting.
+
+==============================================================================
+6. FOLDING                                                *godoc-swagger-folding*
+
+The plugin provides folding support for godoc comment blocks using one of two
+approaches: basic command-based folding or integration with nvim-ufo.
+
+Folding is enabled by default but can be disabled in the configuration:
+
+>lua
+    require('godoc-swagger').setup({
+      enable_folding = false
+    })
+<
+
+The plugin identifies godoc blocks by:
+- Starting with a line containing "godoc"
+- Including all consecutive lines that are Swagger annotations (@Something)
+- Ending at the first non-comment line
+
+The plugin provides three approaches to hide godoc blocks:
+
+1. Extmark-Based Approach (fully compatible with UFO):
+   - zgd - Toggle godoc blocks using extmarks (won't affect folding)
+   Commands:
+   :GodocToggle     - Toggle godoc blocks using extmarks
+
+   This approach uses Neovim's extmark feature to visually hide the content
+   without changing the buffer or interfering with folding systems.
+
+2. Conceal-Based Approach (fairly compatible with UFO):
+   - zC - Toggle concealment of godoc blocks
+   Commands:
+   :GodocToggleConceal - Toggle concealment of all godoc blocks
+
+   This approach doesn't use the folding system but relies on Vim's concealment feature.
+
+3. Traditional Folding (now compatible with other folding plugins):
+   - za - Toggle fold for the godoc block under cursor
+   - zo - Open fold for the godoc block under cursor
+   - zc - Close fold for the godoc block under cursor
+   - zG - Create folds for all godoc blocks in the file
+   Commands:
+   :GodocFold       - Create folds for all godoc blocks
+   :GodocFoldDebug  - Debug folding for block under cursor
+
+   This approach has been improved to work alongside other folding systems without
+   disrupting them.
+
+For users of nvim-ufo, the plugin provides a custom folding provider:
+
+>lua
+    require('ufo').setup({
+      provider_selector = function(bufnr, filetype, buftype)
+        if filetype == 'go' then
+          -- Use godoc-swagger's fold provider for Go files
+          return {'godoc-swagger', 'treesitter', 'indent'}
+        end
+        return {'treesitter', 'indent'}
+      end,
+      -- Register the provider
+      providers = {
+        ['godoc-swagger'] = function(bufnr)
+          return require('godoc-swagger').folds.get_folding_ranges(bufnr)
+        end
+      }
+    })
+<
+
+This integration works seamlessly with UFO's other folding features, enabling 
+you to use godoc block folding alongside your existing folding setup.
+
+==============================================================================
+7. LICENSE                                              *godoc-swagger-license*
+
+MIT License
+
+Copyright (c) 2023 Your Name
+
+ vim:tw=78:ts=8:ft=help:norl:
