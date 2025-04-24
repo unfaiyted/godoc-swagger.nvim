@@ -114,8 +114,18 @@ The plugin works with zero configuration, but you can customize it:
     command to refresh the highlighting if needed.
 
 *:GodocFold*
-    Create folds for all godoc blocks in the current buffer. This works with any
-    folding system, including standard Vim folding and nvim-ufo.
+    Create folds for all godoc blocks in the current buffer and fold them. This
+    works with any folding system, including standard Vim folding and nvim-ufo.
+    
+*:GodocRegisterFolds*
+    Register all godoc blocks as foldable regions without actually folding them.
+    This allows you to use standard Vim fold commands (`za`, `zo`, `zc`) on the
+    godoc blocks naturally. This happens automatically when you open a Go file,
+    but this command can be used to manually re-register the folds if needed.
+    
+*:GodocUnfold*
+    Unfold all godoc blocks in the current buffer. This is useful if you've folded
+    some godoc blocks and want to quickly reveal all of them at once.
 
 *:GodocGotoDefinition*
     Jump to the definition of the model under cursor in a @Success or @Failure
@@ -129,6 +139,15 @@ The plugin works with zero configuration, but you can customize it:
 *zG*
     Keybinding to create folds for all godoc blocks in the current buffer.
     This is a shortcut for :GodocFold and is automatically set up for Go files.
+    
+*zgR*
+    Keybinding to re-register all godoc blocks as foldable regions without
+    actually folding them. This is helpful if the folding gets disrupted
+    and you want to restore the ability to fold/unfold godoc blocks.
+    
+*zgO*
+    Keybinding to unfold all godoc blocks in the current buffer. This is useful
+    when you want to quickly expand all folded godoc blocks at once.
     
 *<leader>gd*
     Keybinding to go to definition of the model under cursor. This works in
@@ -201,7 +220,7 @@ The plugin identifies godoc blocks by:
 - Including all consecutive lines that are Swagger annotations (@Something)
 - Ending at the first non-comment line
 
-The plugin provides three approaches to hide godoc blocks:
+The plugin provides four approaches to hide godoc blocks:
 
 1. Extmark-Based Approach (fully compatible with UFO):
    - zgd - Toggle godoc blocks using extmarks (won't affect folding)
@@ -218,17 +237,30 @@ The plugin provides three approaches to hide godoc blocks:
 
    This approach doesn't use the folding system but relies on Vim's concealment feature.
 
-3. Traditional Folding (now compatible with other folding plugins):
-   - za - Toggle fold for the godoc block under cursor
-   - zo - Open fold for the godoc block under cursor
-   - zc - Close fold for the godoc block under cursor
-   - zG - Create folds for all godoc blocks in the file
+3. Auto-Registration Folding (NEW! Most intuitive):
+   - Automatically registers godoc blocks as foldable regions on buffer load
+   - Uses standard fold commands to interact with them:
+     - za - Toggle fold for the godoc block under cursor
+     - zo - Open fold for the godoc block under cursor
+     - zc - Close fold for the godoc block under cursor
+   - zgR - Re-register all godoc blocks if folding gets disrupted
+   - zgO - Unfold all godoc blocks in the file
    Commands:
-   :GodocFold       - Create folds for all godoc blocks
+   :GodocRegisterFolds - Register all godoc blocks as foldable regions
+   :GodocUnfold - Unfold all godoc blocks in the file
+
+   This approach lets you use standard Vim fold commands naturally while preserving
+   compatibility with other folding systems. Godoc blocks are registered as foldable
+   when you open a Go file but are not initially folded.
+
+4. Manual Fold Creation (compatible with other folding plugins):
+   - zG - Create and fold all godoc blocks in the file
+   Commands:
+   :GodocFold       - Create and fold all godoc blocks
    :GodocFoldDebug  - Debug folding for block under cursor
 
-   This approach has been improved to work alongside other folding systems without
-   disrupting them.
+   This approach creates folds and collapses them all at once. It has been improved
+   to work alongside other folding systems without disrupting them.
 
 For users of nvim-ufo, the plugin provides a custom folding provider:
 
@@ -259,7 +291,7 @@ you to use godoc block folding alongside your existing folding setup.
 The plugin provides navigation capabilities for model types referenced in godoc
 comments, similar to the "Go To Definition" feature found in LSP clients.
 
-When your cursor is on a model name in a @Success or @Failure annotation, you can:
+When your cursor is on a model name in a @Success, @Failure, or @Param annotation, you can:
 
 1. Press `<leader>gd` to jump to the definition of that model
 2. Run `:GodocGotoDefinition` to navigate to the model definition
@@ -267,6 +299,11 @@ When your cursor is on a model name in a @Success or @Failure annotation, you ca
 Model references are automatically detected from:
 - @Success annotations (e.g., @Success 200 {object} models.User)
 - @Failure annotations (e.g., @Failure 404 {object} models.ErrorResponse)
+- @Param annotations (e.g., @Param request body requests.ClientTestRequest[client.ClientConfig] true "Updated client data")
+
+Different types of model references use distinct colors:
+- Response models (@Success, @Failure) use a gray-green color
+- Request models (@Param) use a gray-olive color
 
 The plugin will:
 1. First try to find the definition in the current buffer
@@ -283,8 +320,11 @@ Model references are highlighted and underlined to indicate they are navigable:
 >go
     // GetUserByID godoc
     // @Summary Get user by ID
+    // @Param id path int true "User ID"
+    // @Param request body requests.UserRequest true "User data"
+    //                    ^^^^^^^-------------- Navigate to request models with <leader>gd
     // @Success 200 {object} models.User
-    //                        ^^^^^---------- Navigate to this model with <leader>gd
+    //                        ^^^^^---------- Navigate to response models with <leader>gd
     // @Failure 404 {object} models.ErrorResponse
     //                        ^^^^^^^^---------- Or navigate to this model
 <

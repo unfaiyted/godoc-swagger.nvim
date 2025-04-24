@@ -105,7 +105,19 @@ require('godoc-swagger').setup({
     router_path_var = '#c2a37b', -- Router path variables in curly braces {varName}
     router_method = '#bfa36a', -- Router method ([get], [post], etc)
     
-    security_scheme = '#dda3a1' -- Security scheme name
+    security_scheme = '#dda3a1', -- Security scheme name
+    
+    -- LSP navigation features - Response models (Success/Failure)
+    model_reference = '#6d8a82', -- Response model references (root level)
+    model_reference_l1 = '#5e7870', -- Level 1 nested generic 
+    model_reference_l2 = '#50655f', -- Level 2 nested generic
+    model_reference_l3 = '#41534e', -- Level 3+ nested generic
+    
+    -- Request models (@Param models)
+    request_model_reference = '#7a8775', -- Request model references (root level)
+    request_model_reference_l1 = '#697466', -- Level 1 nested generic
+    request_model_reference_l2 = '#5a6458', -- Level 2 nested generic
+    request_model_reference_l3 = '#4a534a' -- Level 3+ nested generic
   },
   
   -- File patterns to apply highlighting to (optional)
@@ -151,10 +163,11 @@ The plugin adds navigation capabilities for model types referenced in godoc comm
 :GodocHighlightModels - Re-highlight model references in the current buffer
 ```
 
-When your cursor is on a model name like `models.User` in a `@Success` or `@Failure` annotation,
+When your cursor is on a model name like `models.User` in a `@Success`, `@Failure`, or `@Param` annotation,
 you can press `<leader>gd` to jump to its definition in your code (or your custom keybinding if configured).
 
-Model references are automatically underlined to show they are navigable. There are four navigation styles:
+Model references are automatically underlined to show they are navigable, with different colors for response models 
+(`@Success`/`@Failure`) and request models (`@Param`). There are four navigation styles:
 
 1. **Snacks (default)** - Uses the Snacks picker which automatically closes after selection
 2. **Picker** - Uses Telescope to show all matching symbols in a dropdown list
@@ -182,7 +195,7 @@ The plugin provides folding support for godoc comment blocks using one of two ap
 
 #### Hiding Godoc Blocks
 
-The plugin provides three approaches to hide godoc blocks, with increasing levels of compatibility with other folding systems:
+The plugin provides four approaches to hide godoc blocks, with increasing levels of compatibility with other folding systems:
 
 **1. Extmark-Based Approach (RECOMMENDED, fully compatible with UFO):**
 - `zgd` - Toggle godoc blocks using extmarks (won't affect folding)
@@ -204,22 +217,37 @@ Commands:
 
 This approach doesn't use the folding system but relies on Vim's concealment feature.
 
-**3. Traditional Folding (now compatible with other folding plugins):**
-- `zG` - Create folds for all godoc blocks in the file
+**3. Traditional Folding with Auto-Registration (NEW! Most intuitive):**
+- Automatically registers godoc blocks as foldable regions but keeps them open by default
+- Use normal Vim fold commands (`za`, `zc`, `zo`) to interact with the godoc blocks
+- `zgR` - Re-register all godoc blocks if folding gets disrupted
+- `zgO` - Unfold all godoc blocks in the file
 
 Commands:
 ```
-:GodocFold        - Create folds for all godoc blocks in the current file
+:GodocRegisterFolds - Register all godoc blocks as foldable regions (without folding them)
+:GodocUnfold - Unfold all godoc blocks in the file
+```
+
+This approach now automatically marks godoc blocks as foldable regions without actually folding them, allowing you to use standard Vim fold commands to open and close them. This gives the most natural folding experience while preserving compatibility with other folding systems.
+
+**4. Manual Fold Creation (compatible with other folding plugins):**
+- `zG` - Create folds for all godoc blocks in the file and collapse them
+
+Commands:
+```
+:GodocFold        - Create folds for all godoc blocks in the current file and fold them
 :GodocFoldDebug   - Attempt to fold the block under cursor with detailed debugging output
 ```
 
 This approach uses Vim's manual folding to create folds for godoc blocks, but has been improved to work alongside other folding systems like nvim-ufo without disrupting them.
 
 **Troubleshooting:**
-If you're having trouble with hiding godoc blocks:
-1. Try the extmark-based approach with `zgd` or `:GodocToggle` first (recommended)
-2. If that doesn't work, try the conceal approach with `zC` or `:GodocToggleConceal`
-3. The traditional folding method (`:GodocFold`) has been improved to work alongside other folding systems
+If you're having trouble with folding godoc blocks:
+1. Try using the standard Vim fold commands (`za`, `zc`, `zo`) after opening a Go file, as the plugin now automatically registers godoc blocks as foldable regions
+2. If standard fold commands don't work, use `zgR` or `:GodocRegisterFolds` to force re-registration of godoc blocks
+3. Try the extmark-based approach with `zgd` or `:GodocToggle` if you prefer hiding blocks completely
+4. If those don't work, try the conceal approach with `zC` or `:GodocToggleConceal`
 
 #### Integration with nvim-ufo
 

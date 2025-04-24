@@ -416,6 +416,96 @@ function M_folds.toggle_conceal_godoc_blocks()
   end
 end
 
+-- Register godoc blocks as foldable regions but keep them open
+function M_folds.register_godoc_folds()
+  local bufnr = vim.api.nvim_get_current_buf()
+  
+  -- Only process Go files
+  if vim.bo[bufnr].filetype ~= 'go' then
+    if M.debug_mode then
+      vim.notify('Not a Go file', vim.log.levels.WARN)
+    end
+    return
+  end
+  
+  -- Get all godoc blocks without changing folding method
+  local ranges = M_folds.get_folding_ranges(bufnr)
+  local fold_count = 0
+  
+  -- We'll use a more sophisticated approach to register folds
+  -- Store the current fold settings to restore them later
+  local old_fdm = vim.wo.foldmethod
+  local old_foldminlines = vim.wo.foldminlines
+  local old_foldlevel = vim.wo.foldlevel
+  
+  -- Create folds in a way that keeps them open
+  if #ranges > 0 then
+    -- Set foldmethod to manual temporarily
+    vim.wo.foldmethod = 'manual'
+    
+    -- Create all folds but keep them open
+    for _, range in ipairs(ranges) do
+      local start_line = range.startRow + 1  -- Convert to 1-indexed for Vim commands
+      local end_line = range.endRow + 1      -- Convert to 1-indexed for Vim commands
+      
+      -- Create the fold
+      pcall(function() 
+        vim.cmd(start_line .. ',' .. end_line .. 'fold')
+      end)
+      fold_count = fold_count + 1
+    end
+    
+    -- Open all folds to make them initially expanded
+    pcall(function() vim.cmd('normal! zR') end)
+    
+    -- Restore original fold settings
+    vim.wo.foldmethod = old_fdm
+    vim.wo.foldminlines = old_foldminlines
+    vim.wo.foldlevel = old_foldlevel
+  end
+  
+  if M.debug_mode then
+    vim.notify('Registered ' .. fold_count .. ' godoc blocks as foldable (but kept expanded)', vim.log.levels.INFO)
+  end
+  
+  -- Store the folds in a buffer variable so we know they're registered
+  vim.b.godoc_folds_registered = true
+end
+
+-- Unfold all godoc blocks in the buffer
+function M_folds.unfold_godoc_blocks()
+  local bufnr = vim.api.nvim_get_current_buf()
+  
+  -- Only process Go files
+  if vim.bo[bufnr].filetype ~= 'go' then
+    if M.debug_mode then
+      vim.notify('Not a Go file', vim.log.levels.WARN)
+    end
+    return
+  end
+  
+  -- Get all godoc blocks
+  local ranges = M_folds.get_folding_ranges(bufnr)
+  local unfold_count = 0
+  
+  -- Unfold each godoc block
+  for _, range in ipairs(ranges) do
+    local start_line = range.startRow + 1  -- Convert to 1-indexed for Vim commands
+    local end_line = range.endRow + 1      -- Convert to 1-indexed for Vim commands
+    
+    -- Open the fold for this range
+    pcall(function() vim.cmd(start_line .. ',' .. end_line .. 'foldopen') end)
+    unfold_count = unfold_count + 1
+  end
+  
+  if M.debug_mode then
+    vim.notify('Unfolded ' .. unfold_count .. ' godoc blocks', vim.log.levels.INFO)
+  else if unfold_count > 0 then
+    vim.notify('Unfolded ' .. unfold_count .. ' godoc blocks', vim.log.levels.INFO)
+  end
+  end
+end
+
 -- Standard fold implementation - compatible with other folding systems
 function M_folds.fold_godoc_blocks()
   local bufnr = vim.api.nvim_get_current_buf()
@@ -569,11 +659,17 @@ function M.setup(opts)
     
     security_scheme = '#dda3a1', -- Security scheme name
     
-    -- LSP navigation features
+    -- LSP navigation features - Response models (Success/Failure)
     model_reference = '#6d8a82', -- Clickable model references (primary/root level) - more gray-green base
     model_reference_l1 = '#5e7870', -- Level 1 nested generic (more gray)
     model_reference_l2 = '#50655f', -- Level 2 nested generic (more gray)
-    model_reference_l3 = '#41534e' -- Level 3+ nested generic (very gray)
+    model_reference_l3 = '#41534e', -- Level 3+ nested generic (very gray)
+    
+    -- Request models (@Param models)
+    request_model_reference = '#7a8775', -- Clickable request model references (primary) - similar but distinct color
+    request_model_reference_l1 = '#697466', -- Level 1 nested generic
+    request_model_reference_l2 = '#5a6458', -- Level 2 nested generic
+    request_model_reference_l3 = '#4a534a' -- Level 3+ nested generic
   }
   
   -- Debug mode for troubleshooting
@@ -641,10 +737,17 @@ function M.setup(opts)
     'highlight default GodocSwaggerSecurityScheme ctermfg=174 guifg=' .. colors.security_scheme,
     
     -- LSP navigation features with graduated colors for different nesting levels
+    -- Response model references (Success/Failure)
     'highlight default GodocSwaggerModelReference ctermfg=108 guifg=' .. colors.model_reference .. ' gui=underline',
     'highlight default GodocSwaggerModelReferenceL1 ctermfg=107 guifg=' .. colors.model_reference_l1 .. ' gui=underline',
     'highlight default GodocSwaggerModelReferenceL2 ctermfg=102 guifg=' .. colors.model_reference_l2 .. ' gui=none',
     'highlight default GodocSwaggerModelReferenceL3 ctermfg=101 guifg=' .. colors.model_reference_l3 .. ' gui=none',
+    
+    -- Request model references (@Param)
+    'highlight default GodocSwaggerRequestModelReference ctermfg=107 guifg=' .. colors.request_model_reference .. ' gui=underline',
+    'highlight default GodocSwaggerRequestModelReferenceL1 ctermfg=106 guifg=' .. colors.request_model_reference_l1 .. ' gui=underline',
+    'highlight default GodocSwaggerRequestModelReferenceL2 ctermfg=101 guifg=' .. colors.request_model_reference_l2 .. ' gui=none',
+    'highlight default GodocSwaggerRequestModelReferenceL3 ctermfg=100 guifg=' .. colors.request_model_reference_l3 .. ' gui=none',
     
     -- Debug highlighting
     'highlight default GodocSwaggerDebugBlock ctermfg=188 guifg=#FFFFFF guibg=#333333'
@@ -684,6 +787,17 @@ function M.setup(opts)
     callback = function()
       -- Apply immediately for the current buffer
       M.apply_highlighting()
+      
+      -- Register folds if folding is enabled but don't fold them
+      if M.enable_folding then
+        -- Defer the fold registration to make sure we don't interfere with other fold settings
+        vim.defer_fn(function()
+          -- Only register if we haven't already
+          if not vim.b.godoc_folds_registered then
+            M_folds.register_godoc_folds()
+          end
+        end, 100) -- Short delay to let other fold settings take effect first
+      end
       
       -- Set up TextChanged events for this buffer to update highlighting as user types
       vim.api.nvim_create_autocmd({'TextChanged', 'TextChangedI'}, {
@@ -744,6 +858,16 @@ function M.setup(opts)
       
       vim.api.nvim_create_user_command('GodocFoldDebug', function()
         M_folds.fold_under_cursor(true)
+      end, {})
+      
+      -- New command to register folds without folding them
+      vim.api.nvim_create_user_command('GodocRegisterFolds', function()
+        M_folds.register_godoc_folds()
+      end, {})
+      
+      -- Command to unfold all godoc blocks
+      vim.api.nvim_create_user_command('GodocUnfold', function()
+        M_folds.unfold_godoc_blocks()
       end, {})
       
       -- UFO-compatible methods (won't interfere with folding)
@@ -849,6 +973,17 @@ require('ufo').setup({
         vim.keymap.set('n', 'zG', function()
           M_folds.fold_godoc_blocks()
         end, { buffer = true, desc = "Fold All Godoc Blocks" })
+        
+        -- zgR - Force re-register all godoc folds (helpful if folding gets disrupted)
+        vim.keymap.set('n', 'zgR', function()
+          vim.b.godoc_folds_registered = false  -- Reset the registration flag
+          M_folds.register_godoc_folds()
+        end, { buffer = true, desc = "Re-register godoc folds (without folding)" })
+        
+        -- zgO - Unfold all godoc blocks in the file
+        vim.keymap.set('n', 'zgO', function()
+          M_folds.unfold_godoc_blocks()
+        end, { buffer = true, desc = "Unfold all godoc blocks" })
         
         -- Add diagnostic keybinding that bypasses za completely
         vim.keymap.set('n', '<Leader>z', function()

@@ -134,6 +134,45 @@ function M.parse_model_references(bufnr)
             end
           end
         end
+      elseif current_block and line:match("^%s*// @Param") then
+        -- Parse Param line: @Param request body requests.ClientTestRequest[client.ClientConfig] true "Updated client data"
+        -- The model can be in any of the data type positions, and is typically in the form of package.Type
+
+        -- Extract the entire Param line after @Param
+        local param_line = line:match("@Param%s+(.+)")
+        
+        if param_line then
+          -- Find the end of the description (everything after " is description)
+          local param_only = param_line:match("^(.-)%s+\"") or param_line
+          
+          -- Now find all model references in format package.Type
+          for package_name, type_name in param_only:gmatch("([%w_]+)%.([%w_]+)") do
+            local full_model = package_name .. "." .. type_name
+            local pos_start = line:find(full_model, 1, true)
+            
+            if pos_start then
+              -- Determine nesting level for color differentiation
+              local nesting_level = determine_nesting_level(line, pos_start)
+              
+              -- Try to extract param information
+              local param_name = param_line:match("^(%S+)")
+              local param_location = param_line:match("^%S+%s+(%S+)")
+              
+              table.insert(current_block.models, {
+                line = i,
+                type = "param", -- Mark it as a param type for different highlighting
+                param_name = param_name or "",
+                param_location = param_location or "",
+                model = full_model,
+                -- Store the position information of the model name
+                pos_start = pos_start,
+                pos_end = pos_start + #full_model - 1,
+                -- Store nesting level for highlighting
+                nesting_level = nesting_level
+              })
+            end
+          end
+        end
       elseif current_block and not line:match("^%s*//") then
         -- End of comment block
         if #current_block.models > 0 then
@@ -607,14 +646,20 @@ function M.highlight_model_references(bufnr)
       local start_col = model_ref.pos_start - 1  -- Convert to 0-indexed
       local end_col = model_ref.pos_end
       
+      -- Determine if this is a request model (from @Param) or response model (from @Success/@Failure)
+      local is_request_model = model_ref.type == "param"
+      
+      -- Base highlight group prefix
+      local hl_prefix = is_request_model and "GodocSwaggerRequestModelReference" or "GodocSwaggerModelReference"
+      
       -- Determine highlight group based on nesting level
-      local hl_group = "GodocSwaggerModelReference"
+      local hl_group = hl_prefix
       if model_ref.nesting_level == 1 then
-        hl_group = "GodocSwaggerModelReferenceL1"
+        hl_group = hl_prefix .. "L1"
       elseif model_ref.nesting_level == 2 then
-        hl_group = "GodocSwaggerModelReferenceL2"
+        hl_group = hl_prefix .. "L2"
       elseif model_ref.nesting_level >= 3 then
-        hl_group = "GodocSwaggerModelReferenceL3"
+        hl_group = hl_prefix .. "L3"
       end
       
       -- Add highlighting for the model reference with a higher priority to override other highlights
@@ -629,19 +674,33 @@ function M.highlight_model_references(bufnr)
   end
   
   if ref_count > 0 and vim.g.godoc_swagger_debug_mode then
-    -- Count references by nesting level for more detailed debug info
-    local count_by_level = {0, 0, 0, 0} -- level 0, 1, 2, 3+
+    -- Count references by nesting level and type for more detailed debug info
+    local response_count_by_level = {0, 0, 0, 0} -- level 0, 1, 2, 3+ for response models
+    local request_count_by_level = {0, 0, 0, 0}  -- level 0, 1, 2, 3+ for request models
     
     for _, block in ipairs(references) do
       for _, model_ref in ipairs(block.models) do
         local level = math.min(3, model_ref.nesting_level or 0)
-        count_by_level[level + 1] = count_by_level[level + 1] + 1
+        if model_ref.type == "param" then
+          request_count_by_level[level + 1] = request_count_by_level[level + 1] + 1
+        else
+          response_count_by_level[level + 1] = response_count_by_level[level + 1] + 1
+        end
       end
     end
     
+    local response_total = response_count_by_level[1] + response_count_by_level[2] + 
+                          response_count_by_level[3] + response_count_by_level[4]
+    local request_total = request_count_by_level[1] + request_count_by_level[2] + 
+                         request_count_by_level[3] + request_count_by_level[4]
+    
     vim.notify(string.format(
-      "Highlighted %d model references with graduated colors based on nesting level (L0: %d, L1: %d, L2: %d, L3+: %d)",
-      ref_count, count_by_level[1], count_by_level[2], count_by_level[3], count_by_level[4]
+      "Highlighted %d model references (%d response, %d request) with graduated colors based on nesting level\n" ..
+      "Response models (L0: %d, L1: %d, L2: %d, L3+: %d)\n" ..
+      "Request models (L0: %d, L1: %d, L2: %d, L3+: %d)",
+      ref_count, response_total, request_total,
+      response_count_by_level[1], response_count_by_level[2], response_count_by_level[3], response_count_by_level[4],
+      request_count_by_level[1], request_count_by_level[2], request_count_by_level[3], request_count_by_level[4]
     ), vim.log.levels.INFO)
   end
   
